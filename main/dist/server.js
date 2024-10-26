@@ -43,6 +43,9 @@ class employee {
                     await this.addDepartment();
                     break;
                 case 'quit':
+                    if (response.manage === 'quit') {
+                        return;
+                    }
                     break;
             }
             console.log('User Response:', response.manage);
@@ -60,7 +63,7 @@ class employee {
     employee_name.last_name AS last_name,
     employee_role.Erole AS role,
     employee_department.Edepartment AS department,
-    employee_salary.Esalary AS salary
+    employee_role.Esalary AS salary  -- Retrieve salary from the employee_role table
 FROM 
     employee_all
 JOIN 
@@ -68,11 +71,9 @@ JOIN
 JOIN 
     employee_role ON employee_all.role_id = employee_role.id
 JOIN 
-    employee_department ON employee_all.department_id = employee_department.id
-JOIN 
-    employee_salary ON employee_all.salary_id = employee_salary.id;
+    employee_department ON employee_all.department_id = employee_department.id;
 
-  `;
+ `;
         try {
             const result = await pool.query(sql);
             console.table(result.rows); // Display results in a table format
@@ -148,7 +149,6 @@ JOIN
                     choices: update,
                 },
             ]);
-            // Update employee_all with the new role_id
             const updateQuery = 'UPDATE employee_all SET role_id = $1 WHERE name_id = $2';
             await pool.query(updateQuery, [updates, getID]);
             console.log(`Role updated successfully for employee ID ${getID} to new role ID ${updates}`);
@@ -161,26 +161,33 @@ JOIN
         const view = 'SELECT erole FROM employee_role';
         try {
             const result = await pool.query(view);
-            console.table(result.rows); // Display results in a table format
+            console.table(result.rows);
         }
         catch (error) {
             console.error('Error fetching employees:', error);
         }
     }
     async addRoll() {
-        const { newRoll } = await inquirer.prompt([
+        const { newRoll, newSalary } = await inquirer.prompt([
             {
                 type: 'input',
                 name: 'newRoll',
                 message: 'enter your new roll'
             },
+            {
+                type: 'input',
+                name: 'newSalary',
+                message: 'enter your salary for this role'
+            }
         ]);
         console.log(newRoll);
         const trimmedRoll = newRoll.trim();
-        if (!trimmedRoll) {
-            console.error('Role cannot be empty. Please enter a valid role.');
+        const trimSal = newSalary.trim();
+        if (!trimmedRoll || isNaN(parseInt(trimSal, 10))) {
+            console.error('Role cannot be empty and salary must be a valid number.');
             return;
         }
+        const salaryNumber = parseInt(trimSal, 10);
         try {
             const roleCheckQuery = `SELECT erole FROM employee_role WHERE erole = $1`;
             // console.log("Checking for role:", trimmedRoll); checking for roll after after it gets trim
@@ -193,12 +200,12 @@ JOIN
             }
             else {
                 console.log("Inserting new role:", trimmedRoll);
-                const roleQuery = `INSERT INTO employee_role (erole) VALUES ($1) RETURNING id, erole`;
-                const roleeResult = await pool.query(roleQuery, [trimmedRoll]);
+                const roleQuery = `INSERT INTO employee_role (erole, esalary) VALUES ($1, $2) RETURNING id, erole,esalary`;
+                const roleeResult = await pool.query(roleQuery, [trimmedRoll, salaryNumber]);
                 // console.log("Role Insert Result:", roleeResult); check your roleeResult
                 if (roleeResult.rows.length > 0) {
                     role_id = roleeResult.rows[0].id;
-                    console.log(`New employee role "${trimmedRoll}" created with id: ${role_id}`);
+                    console.log(`New employee role "${trimmedRoll}" created with id: ${role_id} and the salary of ${trimSal}`);
                 }
                 else {
                     console.error('Insert did not return any rows.');
@@ -210,7 +217,7 @@ JOIN
             const allValues = [role_id, finalValue];
             console.log('Inserting into employee_all with query:', allQuery, 'and values:', allValues);
             await pool.query(allQuery, allValues);
-            console.log(`Employee role "${trimmedRoll}" added to the employee_all table with final value "${finalValue}".`);
+            console.log(`Employee role ${trimmedRoll} added to the employee_all table with final value ${finalValue} and a salary of ${trimSal}.`);
         }
         catch (error) {
             console.error('Error inserting roll:', error);
@@ -242,9 +249,9 @@ JOIN
         }
         try {
             const roleCheckQuery = `SELECT Edepartment FROM employee_department WHERE Edepartment = $1`;
-            console.log("Checking for department:", trimmedDepart); //checking for roll after after it gets trim
+            // console.log("Checking for department:", trimmedDepart); //checking for roll after after it gets trim
             const roleCheckResult = await pool.query(roleCheckQuery, [trimmedDepart]);
-            console.log("department Check Result:", roleCheckResult); //check for the result of the pool query
+            // console.log("department Check Result:", roleCheckResult); //check for the result of the pool query
             let department_id;
             if (roleCheckResult.rows.length > 0) {
                 department_id = roleCheckResult.rows[0].id;

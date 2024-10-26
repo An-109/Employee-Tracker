@@ -52,9 +52,7 @@ inquirer
             case 'add department':
               await this.addDepartment();
               break;
-              case 'add salary':
-              await this.addSalary();
-              break;
+             
             case 'quit':
               if (response.manage === 'quit') {
                 return;
@@ -78,7 +76,7 @@ inquirer
     employee_name.last_name AS last_name,
     employee_role.Erole AS role,
     employee_department.Edepartment AS department,
-    employee_salary.Esalary AS salary
+    employee_role.Esalary AS salary 
 FROM 
     employee_all
 JOIN 
@@ -86,11 +84,9 @@ JOIN
 JOIN 
     employee_role ON employee_all.role_id = employee_role.id
 JOIN 
-    employee_department ON employee_all.department_id = employee_department.id
-JOIN 
-    employee_salary ON employee_all.salary_id = employee_salary.id;
+    employee_department ON employee_all.department_id = employee_department.id;
 
-  `;
+ `;
 
   try {
     const result: QueryResult = await pool.query(sql);
@@ -146,7 +142,7 @@ JOIN
           console.error('Error inserting employee:', error);
         }
       }
-      async 
+      
 
       async updateRoll(): Promise<void> {
         try {
@@ -206,31 +202,41 @@ JOIN
     async addRoll(): Promise<void>{
      
       
-      const {newRoll} = await inquirer.prompt([
+      const {newRoll, newSalary} = await inquirer.prompt([
           {
             type: 'input',
             name: 'newRoll',
             message: 'enter your new roll'
           },
+          {
+            type: 'input',
+            name: 'newSalary',
+            message: 'enter your salary for this role'
+          }
 
       ]);
       
       console.log(newRoll);
       const trimmedRoll = newRoll.trim();
-      if (!trimmedRoll) {
-        console.error('Role cannot be empty. Please enter a valid role.');
+      const trimSal = newSalary.trim();
+      if (!trimmedRoll || isNaN(parseInt(trimSal, 10))) {
+        console.error('Role cannot be empty and salary must be a valid number.');
         return; 
-      }
+    }
+
+    const salaryNumber = parseInt(trimSal, 10);
+    
     
       try {
-        
+       
         const roleCheckQuery = `SELECT erole FROM employee_role WHERE erole = $1`;
         // console.log("Checking for role:", trimmedRoll); checking for roll after after it gets trim
         const roleCheckResult = await pool.query(roleCheckQuery, [trimmedRoll]);
+        
         // console.log("Role Check Result:", roleCheckResult); check for the result of the pool query
-    
+      
         let role_id: number | undefined;
-    
+        
        
         if (roleCheckResult.rows.length > 0) {
           role_id = roleCheckResult.rows[0].id;
@@ -238,15 +244,16 @@ JOIN
         } else {
           
           console.log("Inserting new role:", trimmedRoll); 
-          const roleQuery = `INSERT INTO employee_role (erole) VALUES ($1) RETURNING id, erole`;
-          const roleeResult = await pool.query(roleQuery, [trimmedRoll]);
-          
+          const roleQuery = `INSERT INTO employee_role (erole, esalary) VALUES ($1, $2) RETURNING id, erole,esalary`;
+          const roleeResult = await pool.query(roleQuery, [trimmedRoll, salaryNumber]);
+        
           
           // console.log("Role Insert Result:", roleeResult); check your roleeResult
           
           if (roleeResult.rows.length > 0) {
+            
             role_id = roleeResult.rows[0].id; 
-            console.log(`New employee role "${trimmedRoll}" created with id: ${role_id}`);
+            console.log(`New employee role "${trimmedRoll}" created with id: ${role_id} and the salary of ${trimSal}`);
           } else {
             console.error('Insert did not return any rows.');
             return; 
@@ -261,7 +268,7 @@ JOIN
         console.log('Inserting into employee_all with query:', allQuery, 'and values:', allValues);
         await pool.query(allQuery, allValues);
 
-        console.log(`Employee role "${trimmedRoll}" added to the employee_all table with final value "${finalValue}".`);
+        console.log(`Employee role ${trimmedRoll} added to the employee_all table with final value ${finalValue} and a salary of ${trimSal}.`);
     } catch (error) {
         console.error('Error inserting roll:', error);
     }
