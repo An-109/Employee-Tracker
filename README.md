@@ -4,7 +4,7 @@
 ## Description
 Tracks employees role, employees department, employees salary, and allow you to edit and change how it looks according to your need.
 
-## Table of Contents (Optional)
+## Table of Contents 
 - [Installation](#installation)
 - [Usage](#usage)
 - [Features](#features)
