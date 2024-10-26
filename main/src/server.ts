@@ -52,6 +52,9 @@ inquirer
             case 'add department':
               await this.addDepartment();
               break;
+              case 'add salary':
+              await this.addSalary();
+              break;
             case 'quit':
               if (response.manage === 'quit') {
                 return;
@@ -143,7 +146,7 @@ JOIN
           console.error('Error inserting employee:', error);
         }
       }
-
+      async 
 
       async updateRoll(): Promise<void> {
         try {
