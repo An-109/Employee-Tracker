@@ -2,7 +2,8 @@ import express from 'express';
 import { QueryResult } from 'pg';
 import { pool, connectToDb } from './connection.js';
 import inquirer from 'inquirer';
-import { constants } from 'buffer';
+
+import { error } from 'console';
 
 await connectToDb();
 
@@ -15,7 +16,7 @@ app.use(express.json());
 
 class employee{
 
-const start = () => {
+start(): void{
 inquirer
     .prompt([
         {
@@ -26,74 +27,66 @@ inquirer
         }
     ])
         .then(async(response) =>{
-          // const { employee_name, employee_role } = response;
-          // try {
-          //   // Direct database insertion
-          //   const sql = `INSERT INTO employees (name, role) VALUES ($1, $2)`;
-          //   const params = [employee_name, employee_role];
-  
-          //   await pool.query(sql, params);
-          //   console.log(`Employee ${employee_name} added to the database`);
-          // } catch (err) {
-          //   console.error('Error inserting into the database:', err.message);
-          // }
+        
 
-          switch(response) {
+          switch(response.manage) {
             case 'View all employees':
-              await this.viewAllEmployees();
+               await this.viewAllEmployees();
               break;
-            case 'Add employee':
+            case 'Add employees':
               await this.addEmployees();
               break;
             case 'View all roles':
               await this.viewRoll();
               break;
-            case ' Update employees roles':
+            case 'Update employees roles':
               await this.updateRoll();
               break;
-            case ' add roles':
+            case 'add roles':
               await this.addRoll();
               break;
 
-            case ' View all department':
+            case 'View all department':
               await this.viewDepartment();
               break;
-            case ' add department':
+            case 'add department':
               await this.addDepartment();
               break;
             case 'quit':
+              if (response.manage === 'quit') {
+                return;
+              }
               break;
            
           }
-            this.start();
-
+          console.log('User Response:', response.manage);
+          this.start();
         })
         .catch((error) => {
           console.error('Error with Inquirer:', error);
         });
     }
 
-    viewAllEmployees(): void{
+    async viewAllEmployees(): Promise<void>{
       const sql = `
   SELECT 
     employee_all.id AS employee_id,
-    employee_First.Efirst AS first_name,
-    employee_Last.Elast AS last_name,
+    employee_name.first_name AS first_name,
+    employee_name.last_name AS last_name,
     employee_role.Erole AS role,
     employee_department.Edepartment AS department,
     employee_salary.Esalary AS salary
 FROM 
-    employee_all 
+    employee_all
 JOIN 
-    employee_First ON employee_all.firstName_id = employee_First.id
-JOIN 
-    employee_Last ON employee_all.lastName_id = employee_Last.id
+    employee_name ON employee_all.name_id = employee_name.id
 JOIN 
     employee_role ON employee_all.role_id = employee_role.id
 JOIN 
     employee_department ON employee_all.department_id = employee_department.id
 JOIN 
     employee_salary ON employee_all.salary_id = employee_salary.id;
+
   `;
 
   try {
@@ -101,91 +94,268 @@ JOIN
     console.table(result.rows); // Display results in a table format
 } catch (error) {
     console.error('Error fetching employees:', error);
-}
-    }
-    async addEmployees(): Promise<void> {
+} 
+    }                    
+
+  async addEmployees(): Promise<void> {
       const employeeS = await inquirer.prompt([
           {
               type: 'input',
               message: 'Enter first name:',
-              name: 'first_name',
+              name: 'first_name1',
           },
           {
               type: 'input',
               message: 'Enter last name:',
-              name: 'last_name',
+              name: 'last_name2',
           },
         ]);
 
-
-        const {first_name,last_name}= employeeS;
-
-        const query = `INSERT INTO employee_all (firstName_id, lastName_id) VALUES ($1, $2)`;
-        const values = [first_name, last_name];
-
+         
+        const {first_name1,last_name2}= employeeS;
+        
         try {
-          await pool.query(query, values);
-          console.log(`Employee ${first_name} ${last_name} added to the database`);
-      } catch (error) {
+         
+          const nameCheckQuery = `SELECT id FROM employee_name WHERE first_name = $1 AND last_name = $2`;
+          const nameCheckResult = await pool.query(nameCheckQuery, [first_name1, last_name2]);
+      
+          let nameId;
+          if (nameCheckResult.rows.length > 0) {
+           
+            nameId = nameCheckResult.rows[0].id;
+            console.log(`Employee name ${first_name1} ${last_name2} already exists with id ${nameId}`);
+          } 
+          else {
+            
+            const nameQuery = `INSERT INTO employee_name (first_name, last_name) VALUES ($1, $2) RETURNING id`;
+            const nameResult = await pool.query(nameQuery, [first_name1, last_name2]);
+            nameId = nameResult.rows[0].id;
+            console.log(`New employee ${first_name1} ${last_name2} created with id ${nameId}`);
+          }
+      
+          
+          const allQuery = `INSERT INTO employee_all (name_id, final) VALUES ($1, $2)`;
+          const allValues = [nameId, nameId]; 
+          await pool.query(allQuery, allValues);
+      
+          console.log(`Employee ${first_name1} ${last_name2} added to the employee_all table.`);
+        } catch (error) {
           console.error('Error inserting employee:', error);
+        }
       }
 
-      }
+
+      async updateRoll(): Promise<void> {
+        try {
+            const rollsQuery = 'SELECT id, erole FROM employee_role';
+            const { rows: employRoll } = await pool.query(rollsQuery);
+    
+            const update = employRoll.map((getUp: any) => ({
+                name: getUp.erole,
+                value: getUp.id,
+            }));
+    
+            const employeeQuery = 'SELECT id, first_name, last_name FROM employee_name';
+            const { rows: employees } = await pool.query(employeeQuery);
+            const employeeChoices = employees.map((employ: any) => ({
+                name: `${employ.first_name} ${employ.last_name}`,
+                value: employ.id,
+            }));
+    
+            const { getID } = await inquirer.prompt([
+                {
+                    type: 'list',
+                    name: 'getID',
+                    message: 'Select who you want to update role:',
+                    choices: employeeChoices,
+                },
+            ]);
+    
+            const { updates } = await inquirer.prompt([
+                {
+                    type: 'list',
+                    name: 'updates',
+                    message: 'Select new role:',
+                    choices: update,
+                },
+            ]);
+    
+          
+            const updateQuery = 'UPDATE employee_all SET role_id = $1 WHERE name_id = $2';
+            await pool.query(updateQuery, [updates, getID]);
+    
+            console.log(`Role updated successfully for employee ID ${getID} to new role ID ${updates}`);
+        } catch (error) {
+            console.error('Error updating role:', error);
+        }
+    }
+
     async viewRoll(): Promise<void>{
-      
+      const view = 'SELECT erole FROM employee_role';
+      try {
+        const result: QueryResult = await pool.query(view);
+        console.table(result.rows); 
+    } catch (error) {
+        console.error('Error fetching employees:', error);
+    } 
     }
-    async updateRoll(): Promise<void>{
-      
-    }
+
     async addRoll(): Promise<void>{
+     
       
-    }
-    async viewDepartment(): Promise<void>{
+      const {newRoll} = await inquirer.prompt([
+          {
+            type: 'input',
+            name: 'newRoll',
+            message: 'enter your new roll'
+          },
+
+      ]);
       
-    }
-    async addDepartment(): Promise<void>{
-      
-    }
-
-
-
-
-
-
-
-
-
-  }
-
-
-
-
-
-
-
-
-
-
-
-app.post('/api/new-movie', ({ body }, res) => {
-    const sql = `INSERT INTO movies (movie_name)
-      VALUES ($1)`;
-    const params = [body.movie_name];
-  
-    pool.query(sql, params, (err, _result) => {
-      if (err) {
-        res.status(400).json({ error: err.message });
-        return;
+      console.log(newRoll);
+      const trimmedRoll = newRoll.trim();
+      if (!trimmedRoll) {
+        console.error('Role cannot be empty. Please enter a valid role.');
+        return; 
       }
-      res.json({
-        message: 'success',
-        data: body,
-      });
-    });
-  });
+    
+      try {
+        
+        const roleCheckQuery = `SELECT erole FROM employee_role WHERE erole = $1`;
+        // console.log("Checking for role:", trimmedRoll); checking for roll after after it gets trim
+        const roleCheckResult = await pool.query(roleCheckQuery, [trimmedRoll]);
+        // console.log("Role Check Result:", roleCheckResult); check for the result of the pool query
+    
+        let role_id: number | undefined;
+    
+       
+        if (roleCheckResult.rows.length > 0) {
+          role_id = roleCheckResult.rows[0].id;
+          console.log(`Employee role "${trimmedRoll}" already exists with id: ${role_id}`);
+        } else {
+          
+          console.log("Inserting new role:", trimmedRoll); 
+          const roleQuery = `INSERT INTO employee_role (erole) VALUES ($1) RETURNING id, erole`;
+          const roleeResult = await pool.query(roleQuery, [trimmedRoll]);
+          
+          
+          // console.log("Role Insert Result:", roleeResult); check your roleeResult
+          
+          if (roleeResult.rows.length > 0) {
+            role_id = roleeResult.rows[0].id; 
+            console.log(`New employee role "${trimmedRoll}" created with id: ${role_id}`);
+          } else {
+            console.error('Insert did not return any rows.');
+            return; 
+          }
+        }
+    
+        
+        const finalValue = `em${role_id}`;
+        const allQuery = `INSERT INTO employee_all (role_id, final) VALUES ($1, $2)`;
+        const allValues = [role_id, finalValue];
+
+        console.log('Inserting into employee_all with query:', allQuery, 'and values:', allValues);
+        await pool.query(allQuery, allValues);
+
+        console.log(`Employee role "${trimmedRoll}" added to the employee_all table with final value "${finalValue}".`);
+    } catch (error) {
+        console.error('Error inserting roll:', error);
+    }
+    }
+    
+  
+    async viewDepartment(): Promise<void>{
+      const sql = 'SELECT * FROM employee_department;';
+      try{
+        const result: QueryResult = await pool.query(sql);
+        console.table(result.rows);
+      } catch (err){
+        console.error('error',error);
+      }
+    }
+    
+    async addDepartment(): Promise<void>{
+
+      const {newDpart} = await inquirer.prompt([
+        {
+          type: 'input',
+          name: 'newDpart',
+          message: 'enter your new department'
+        },
+
+    ]);
+    
+    console.log(newDpart);
+    const trimmedDepart = newDpart.trim();
+    if (!trimmedDepart) {
+      console.error('department cannot be empty. Please enter a valid department.');
+      return; 
+    }
+  
+    try {
+      
+      const roleCheckQuery = `SELECT Edepartment FROM employee_department WHERE Edepartment = $1`;
+      // console.log("Checking for department:", trimmedDepart); //checking for roll after after it gets trim
+      const roleCheckResult = await pool.query(roleCheckQuery, [trimmedDepart]);
+      // console.log("department Check Result:", roleCheckResult); //check for the result of the pool query
+  
+      let department_id: number | undefined;
+  
+     
+      if (roleCheckResult.rows.length > 0) {
+        department_id = roleCheckResult.rows[0].id;
+        console.log(`Employee department "${trimmedDepart}" already exists with id: ${department_id}`);
+      } else {
+        
+        console.log("Inserting new role:", trimmedDepart); 
+        const roleQuery = `INSERT INTO employee_department (Edepartment) VALUES ($1) RETURNING id, Edepartment`;
+        const roleeResult = await pool.query(roleQuery, [trimmedDepart]);
+        
+        
+        // console.log("Role Insert Result:", roleeResult); check your roleeResult
+        
+        if (roleeResult.rows.length > 0) {
+          department_id = roleeResult.rows[0].id; 
+          console.log(`New employee role "${trimmedDepart}" created with id: ${department_id}`);
+        } else {
+          console.error('Insert did not return any rows.');
+          return; 
+        }
+      }
+    
+
+    const finalValue = `em${department_id}`;
+    const allQuery = `INSERT INTO employee_all (department_id, final) VALUES ($1, $2)`;
+    const allValues = [department_id, finalValue];
+
+    console.log('Inserting into employee_all with query:', allQuery, 'and values:', allValues);
+    await pool.query(allQuery, allValues);
+
+    console.log(`Employee department "${trimmedDepart}" added to the employee_all table with final value "${finalValue}".`);
+} catch (error) {
+    console.error('Error inserting roll:', error);
+}
+  }
+}
 
 
-  // Default response for any other request (Not Found)
+
+
+   
+   
+
+
+    
+  
+
+  const runEmploy = new employee();
+  runEmploy.start();
+  
+
+
+
+
 app.use((_req, res) => {
     res.status(404).end();
   });
@@ -193,4 +363,3 @@ app.use((_req, res) => {
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
   });
-}
